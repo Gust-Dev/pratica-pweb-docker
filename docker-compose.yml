@@ -7,6 +7,7 @@ services:
       POSTGRES_DB: todos
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./backend/db-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d todos"]
       interval: 5s
@@ -24,6 +25,8 @@ services:
       DB_PASSWORD: postgres
       DB_NAME: todos
       PORT: 3000
+    ports:
+      - "3000:3000"
     depends_on:
       db:
         condition: service_healthy
