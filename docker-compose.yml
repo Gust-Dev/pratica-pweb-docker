@@ -1,5 +1,5 @@
 services:
-  # Serviço do Banco de Dados
+  # Serviço do Banco de Dados (PostgreSQL)
   db:
     image: postgres:16-alpine
     environment:
@@ -14,7 +14,17 @@ services:
       timeout: 3s
       retries: 10
 
-  # Serviço do Backend (API)
+  # Serviço Redis (Cache)
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+
+  # Serviço do Backend (API Node.js)
   backend:
     build: ./backend
     environment:
@@ -25,19 +35,28 @@ services:
       DB_PASSWORD: postgres
       DB_NAME: todos
       PORT: 3000
+
+      # Variáveis para o Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
     ports:
       - "3000:3000"
+
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
 
-  # Serviço do Frontend (Site)
+  # Serviço do Frontend (Nginx + React/Vite)
   frontend:
     build: ./frontend
     depends_on:
       - backend
     ports:
-      - "80:80" # Porta do seu PC : Porta do Container
+      - "80:80"
 
 volumes:
   pgdata:
+  redisdata:
