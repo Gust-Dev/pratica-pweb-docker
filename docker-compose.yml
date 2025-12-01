@@ -1,69 +1,40 @@
-version: '3.8'
-
 services:
-  # Banco de dados PostgreSQL
-  db-pweb:
-    image: postgres:15-alpine
-    container_name: db-pweb
+  # Serviço do Banco de Dados
+  db:
+    image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: todolist
-    ports:
-      - "5434:5432"
+      POSTGRES_DB: todos
     volumes:
-      - postgres_pweb_data:/var/lib/postgresql/data
-    networks:
-      - todo-pweb-network
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d todos"]
       interval: 5s
-      timeout: 5s
+      timeout: 3s
       retries: 10
-      start_period: 10s
 
-  # Backend API
-  backend-pweb:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: backend-pweb
+  # Serviço do Backend (API)
+  backend:
+    build: ./backend
     environment:
-      NODE_ENV: production
-      PORT: 3000
-      DB_HOST: db-pweb
+      NODE_ENV: development
+      DB_HOST: db
       DB_PORT: 5432
       DB_USER: postgres
       DB_PASSWORD: postgres
-      DB_NAME: todolist
-    ports:
-      - "3000:3000"
+      DB_NAME: todos
+      PORT: 3000
     depends_on:
-      db-pweb:
+      db:
         condition: service_healthy
-    networks:
-      - todo-pweb-network
-    restart: unless-stopped
 
-  # Frontend (Build e serve com Nginx)
-  frontend-pweb:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        - VITE_API_BASE_URL=http://localhost:3000
-    container_name: frontend-pweb
-    ports:
-      - "80:80"
+  # Serviço do Frontend (Site)
+  frontend:
+    build: ./frontend
     depends_on:
-      - backend-pweb
-    networks:
-      - todo-pweb-network
-    restart: unless-stopped
-
-networks:
-  todo-pweb-network:
-    driver: bridge
+      - backend
+    ports:
+      - "80:80" # Porta do seu PC : Porta do Container
 
 volumes:
-  postgres_pweb_data:
+  pgdata:
