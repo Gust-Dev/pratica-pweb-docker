@@ -29,6 +29,8 @@ services:
     build: ./backend
     environment:
       NODE_ENV: development
+
+      # --- Banco de Dados ---
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: postgres
@@ -36,9 +38,14 @@ services:
       DB_NAME: todos
       PORT: 3000
 
-      # Variáveis para o Redis
+      # --- Redis ---
       REDIS_HOST: redis
       REDIS_PORT: 6379
+
+      # --- Supabase (NOVO) ---
+      SUPABASE_URL: https://COLOQUE_AQUI
+      SUPABASE_ANON_KEY: COLOQUE_AQUI
+      SUPABASE_BUCKET: tasks-files
 
     ports:
       - "3000:3000"
