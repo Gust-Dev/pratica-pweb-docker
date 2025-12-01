@@ -1,51 +1,65 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import multer from "multer";
+import { createClient } from "@supabase/supabase-js";
+
 import bd from "./src/models/index.js";
-import client from "./src/redis.js"; // importa redis
+import client from "./src/redis.js";
 
 dotenv.config();
 
-const { Task } = bd;
+/* ----------------- MODELOS ----------------- */
+const { Task, User } = bd;
+
 const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(cors());
 
-// --- ROTAS ---
+/* --------------- SUPABASE CONFIG --------------- */
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
 
-// Rota inicial
+const BUCKET = process.env.SUPABASE_BUCKET;
+
+/* ---------------- MULTER ---------------- */
+const upload = multer({ storage: multer.memoryStorage() });
+
+/* ---------------- ROTAS ---------------- */
+
+/* TESTE */
 app.get("/", (req, res) => {
   res.json({ message: "Hello World" });
 });
 
-// LISTAR TASKS (com cache Redis)
+/* -------- LISTAR TASKS (COM CACHE) -------- */
 app.get("/tasks", async (req, res) => {
   try {
-    // 1. Verifica cache existente
     const cache = await client.get("tasks");
 
     if (cache) {
-      console.log("✔ HIT: Dados carregados do REDIS");
+      console.log("✔ HIT: Dados do Redis");
       return res.json(JSON.parse(cache));
     }
 
-    console.log("✖ MISS: Cache vazio — consultando BD...");
+    console.log("✖ MISS: Buscando no banco...");
     const tasks = await Task.findAll();
 
-    // 2. Guarda no Redis por 30 segundos
     await client.setEx("tasks", 30, JSON.stringify(tasks));
 
     res.json(tasks);
 
   } catch (error) {
-    console.error("Erro GET /tasks:", error);
-    res.status(500).json({ error: "Erro ao buscar tarefas" });
+    console.error(error);
+    res.status(500).json({ error: "Erro ao listar tarefas" });
   }
 });
 
-// CRIAR TASK
+/* -------- CRIAR TASK -------- */
 app.post("/tasks", async (req, res) => {
   try {
     const { description } = req.body;
@@ -55,18 +69,17 @@ app.post("/tasks", async (req, res) => {
 
     const task = await Task.create({ description, completed: false });
 
-    // 🔥 Invalida cache após mudança de estado
     await client.del("tasks");
 
     res.status(201).json(task);
 
   } catch (error) {
-    console.error("Erro POST /tasks:", error);
+    console.error(error);
     res.status(500).json({ error: "Erro ao criar tarefa" });
   }
 });
 
-// BUSCAR UMA TASK POR ID
+/* -------- BUSCAR POR ID -------- */
 app.get("/tasks/:id", async (req, res) => {
   try {
     const task = await Task.findByPk(req.params.id);
@@ -77,12 +90,12 @@ app.get("/tasks/:id", async (req, res) => {
     res.json(task);
 
   } catch (error) {
-    console.error("Erro GET /tasks/:id:", error);
+    console.error(error);
     res.status(500).json({ error: "Erro ao buscar tarefa" });
   }
 });
 
-// ATUALIZAR TASK
+/* -------- ATUALIZAR TASK -------- */
 app.put("/tasks/:id", async (req, res) => {
   try {
     const { description, completed } = req.body;
@@ -94,18 +107,17 @@ app.put("/tasks/:id", async (req, res) => {
 
     await task.update({ description, completed });
 
-    // 🔥 Invalida cache após mudança de estado
     await client.del("tasks");
 
     res.json(task);
 
   } catch (error) {
-    console.error("Erro PUT /tasks/:id:", error);
+    console.error(error);
     res.status(500).json({ error: "Erro ao atualizar tarefa" });
   }
 });
 
-// DELETAR TASK
+/* -------- DELETAR TASK -------- */
 app.delete("/tasks/:id", async (req, res) => {
   try {
     const deleted = await Task.destroy({ where: { id: req.params.id } });
@@ -113,32 +125,70 @@ app.delete("/tasks/:id", async (req, res) => {
     if (!deleted)
       return res.status(404).json({ error: "Tarefa não encontrada" });
 
-    // 🔥 Invalida cache após mudança de estado
     await client.del("tasks");
 
     res.status(204).send();
 
   } catch (error) {
-    console.error("Erro DELETE /tasks/:id:", error);
+    console.error(error);
     res.status(500).json({ error: "Erro ao deletar tarefa" });
   }
 });
 
-// --- INICIALIZAÇÃO DO SERVIDOR ---
-const startServer = async () => {
+/* -------- UPLOAD DE AVATAR (SUPABASE) -------- */
+app.put("/users/:id/avatar", upload.single("avatar"), async (req, res) => {
   try {
-    await bd.sequelize.authenticate();
-    console.log("Conexão com o banco de dados estabelecida com sucesso.");
+    const user = await User.findByPk(req.params.id);
 
-    await bd.sequelize.sync();
-    console.log("Tabelas sincronizadas.");
+    if (!user)
+      return res.status(404).json({ error: "Usuário não encontrado" });
 
-    app.listen(port, "0.0.0.0", () => {
-      console.log(`Server is running on port ${port}`);
+    if (!req.file)
+      return res.status(400).json({ error: "Imagem obrigatória" });
+
+    const file = req.file;
+    const ext = file.originalname.split(".").pop();
+    const storagePath = `avatars/user-${user.id}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(storagePath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: true,
+      });
+
+    if (uploadError)
+      return res.status(500).json({ error: uploadError.message });
+
+    const { data } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
+
+    await user.update({ avatar_url: data.publicUrl });
+
+    res.json({
+      message: "Avatar atualizado!",
+      avatar_url: data.publicUrl
     });
 
   } catch (error) {
-    console.error("Erro fatal ao iniciar a aplicação:", error);
+    console.error(error);
+    res.status(500).json({ error: "Erro ao enviar avatar" });
+  }
+});
+
+/* -------- START -------- */
+const startServer = async () => {
+  try {
+    await bd.sequelize.authenticate();
+    console.log("Banco conectado");
+
+    await bd.sequelize.sync();
+    console.log("Tabelas sincronizadas");
+
+    app.listen(port, "0.0.0.0", () => {
+      console.log(`Server ON na porta ${port}`);
+    });
+  } catch (error) {
+    console.error("Erro ao iniciar:", error);
     process.exit(1);
   }
 };
