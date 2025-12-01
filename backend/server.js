@@ -78,7 +78,7 @@ app.post("/tasks", async (req, res) => {
     res.status(500).json({ error: "Erro ao criar tarefa" });
   }
 });
-
+//
 /* -------- BUSCAR POR ID -------- */
 app.get("/tasks/:id", async (req, res) => {
   try {
