@@ -27,11 +27,11 @@ app.get("/tasks", async (req, res) => {
     const cache = await client.get("tasks");
 
     if (cache) {
-      console.log("✔ Dados carregados do REDIS");
+      console.log("✔ Dados carregados do REDIS (HIT)");
       return res.json(JSON.parse(cache));
     }
 
-    console.log("✖ Cache vazio — consultando BD...");
+    console.log("✖ Cache vazio — consultando BD... (MISS)");
     const tasks = await Task.findAll();
 
     // 2. Guarda no Redis por 30 segundos
