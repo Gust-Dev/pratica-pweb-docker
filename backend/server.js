@@ -27,11 +27,11 @@ app.get("/tasks", async (req, res) => {
     const cache = await client.get("tasks");
 
     if (cache) {
-      console.log("✔ Dados carregados do REDIS (HIT)");
+      console.log("✔ HIT: Dados carregados do REDIS");
       return res.json(JSON.parse(cache));
     }
 
-    console.log("✖ Cache vazio — consultando BD... (MISS)");
+    console.log("✖ MISS: Cache vazio — consultando BD...");
     const tasks = await Task.findAll();
 
     // 2. Guarda no Redis por 30 segundos
@@ -55,7 +55,9 @@ app.post("/tasks", async (req, res) => {
 
     const task = await Task.create({ description, completed: false });
 
-    await client.del("tasks"); // limpa cache ao criar
+    // 🔥 Invalida cache após mudança de estado
+    await client.del("tasks");
+
     res.status(201).json(task);
 
   } catch (error) {
@@ -92,7 +94,8 @@ app.put("/tasks/:id", async (req, res) => {
 
     await task.update({ description, completed });
 
-    await client.del("tasks"); // limpa cache ao atualizar
+    // 🔥 Invalida cache após mudança de estado
+    await client.del("tasks");
 
     res.json(task);
 
@@ -110,7 +113,8 @@ app.delete("/tasks/:id", async (req, res) => {
     if (!deleted)
       return res.status(404).json({ error: "Tarefa não encontrada" });
 
-    await client.del("tasks"); // limpa cache ao deletar
+    // 🔥 Invalida cache após mudança de estado
+    await client.del("tasks");
 
     res.status(204).send();
 
