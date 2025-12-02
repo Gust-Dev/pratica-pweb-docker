@@ -9,7 +9,7 @@ import client from "./src/redis.js";
 
 dotenv.config();
 
-/* ----------------- MODELOS ----------------- */
+///* ----------------- MODELOS ----------------- */
 const { Task, User } = bd;
 
 const app = express();
