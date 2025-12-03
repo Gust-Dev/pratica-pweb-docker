@@ -5,7 +5,7 @@ import multer from "multer";
 import { createClient } from "@supabase/supabase-js";
 
 import bd from "./src/models/index.js";
-import client from "./src/redis.js";
+import client from "./redis.js";
 
 dotenv.config();
 

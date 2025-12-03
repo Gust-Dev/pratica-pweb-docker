@@ -1,8 +1,7 @@
 "use client";
 
+import { API_BASE_URL } from "@/utils/apiBaseUrl";
 import { showSuccess, showError, showLoading, dismissToast } from "@/utils/toast";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
 export interface Task {
   id: string;
