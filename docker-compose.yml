@@ -42,9 +42,9 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
 
-      # --- Supabase (NOVO) ---
-      SUPABASE_URL: https://COLOQUE_AQUI
-      SUPABASE_ANON_KEY: COLOQUE_AQUI
+      # --- Supabase  ---
+      SUPABASE_URL: https://gzqtrkzssqednkuwqlct.supabase.co
+      SUPABASE_ANON_KEY: sb_publishable_VT7Bcjy237XpBpbRC-cq5Q_NdpasdMS
       SUPABASE_BUCKET: tasks-files
 
     ports:

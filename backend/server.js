@@ -26,7 +26,7 @@ const supabase = createClient(
 
 const BUCKET = process.env.SUPABASE_BUCKET;
 
-/* ---------------- MULTER ---------------- */
+/* ---------------- MULTER (memória) ---------------- */
 const upload = multer({ storage: multer.memoryStorage() });
 
 /* ---------------- ROTAS ---------------- */
@@ -78,7 +78,7 @@ app.post("/tasks", async (req, res) => {
     res.status(500).json({ error: "Erro ao criar tarefa" });
   }
 });
-//
+
 /* -------- BUSCAR POR ID -------- */
 app.get("/tasks/:id", async (req, res) => {
   try {
@@ -135,7 +135,7 @@ app.delete("/tasks/:id", async (req, res) => {
   }
 });
 
-/* -------- UPLOAD DE AVATAR (SUPABASE) -------- */
+/* -------- UPLOAD DE AVATAR (SUPABASE STORAGE) -------- */
 app.put("/users/:id/avatar", upload.single("avatar"), async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
@@ -146,10 +146,12 @@ app.put("/users/:id/avatar", upload.single("avatar"), async (req, res) => {
     if (!req.file)
       return res.status(400).json({ error: "Imagem obrigatória" });
 
+    // Nome do arquivo
     const file = req.file;
     const ext = file.originalname.split(".").pop();
     const storagePath = `avatars/user-${user.id}.${ext}`;
 
+    // Upload para Supabase
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
       .upload(storagePath, file.buffer, {
@@ -160,8 +162,10 @@ app.put("/users/:id/avatar", upload.single("avatar"), async (req, res) => {
     if (uploadError)
       return res.status(500).json({ error: uploadError.message });
 
+    // URL pública
     const { data } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
 
+    // Atualizar usuário
     await user.update({ avatar_url: data.publicUrl });
 
     res.json({
