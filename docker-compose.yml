@@ -1,22 +1,26 @@
 version: '3.8'
 
 services:
-  # Serviço do Banco de Dados (PostgreSQL)
+  # -------------------------------------------------------
+  # POSTGRES (Banco de Dados)
+  # -------------------------------------------------------
   db:
     image: postgres:16-alpine
     environment:
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: todos
+      POSTGRES_DB: postgres       
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backend/db-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d todos"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 5s
       timeout: 3s
       retries: 10
 
-  # Serviço Redis (Cache)
+  # -------------------------------------------------------
+  # REDIS (Cache)
+  # -------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: redis
@@ -26,32 +30,46 @@ services:
     volumes:
       - redisdata:/data
 
-  # Serviço do Backend (API Node.js)
+  # -------------------------------------------------------
+  # BACKEND (Node.js)
+  # -------------------------------------------------------
   backend:
     build: ./backend
     environment:
       NODE_ENV: development
-      
-      # --- JWT (CONFIGURAÇÃO FINAL) ---
-      JWT_SECRET: key007
 
-      # --- Banco de Dados ---
+      # --- Porta interna do backend ---
+      PORT: 3000
+
+      # ---------------------------------------------------
+      # JWT (obrigatório para autenticação bcrypt + JWT)
+      # ---------------------------------------------------
+      JWT_SECRET: "key007"
+
+      # ---------------------------------------------------
+      # Banco de Dados (ORM Sequelize)
+      # ---------------------------------------------------
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: todos
-      PORT: 3000
+      DB_PASS: postgres
+      DB_NAME: postgres
 
-      # --- Redis (Cache) ---
+      # ---------------------------------------------------
+      # Redis
+      # ---------------------------------------------------
       REDIS_HOST: redis
       REDIS_PORT: 6379
 
-      # --- Supabase (Storage) ---
+      # ---------------------------------------------------
+      # Supabase (Storage)
+      # ---------------------------------------------------
       SUPABASE_URL: https://gzqtrkzssqednkuwqlct.supabase.co
-      SUPABASE_ANON_KEY: sb_publishable_VT7Bcjy237XpBpbRC-cq5Q_NdpasdMS
-      SUPABASE_SERVICE_ROLE_KEY: "${SUPABASE_SERVICE_ROLE_KEY:-}"
       SUPABASE_BUCKET: fotos
+      
+      # Chave de autenticação usada pelo backend para upload
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_Gckzdobj1V-YEfcdp_b9gQ_HMx5VTpq"
+      SUPABASE_ANON_KEY: sb_publishable_VT7Bcjy237XpBpbRC-cq5Q_NdpasdMS
 
     ports:
       - "3000:3000"
@@ -62,7 +80,9 @@ services:
       redis:
         condition: service_started
 
-  # Serviço do Frontend (Nginx + React/Vite)
+  # -------------------------------------------------------
+  # FRONTEND (Nginx + Vite/React)
+  # -------------------------------------------------------
   frontend:
     build:
       context: ./frontend
