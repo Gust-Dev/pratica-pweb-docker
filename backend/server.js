@@ -269,6 +269,23 @@ app.post("/tasks", async (req, res) => {
   }
 });
 
+app.delete("/tasks/:id", async (req, res) => {
+  try {
+    const deleted = await Task.destroy({ where: { id: req.params.id } });
+
+    if (!deleted) {
+      return res.status(404).json({ error: "Tarefa não encontrada" });
+    }
+
+    await client.del("tasks");
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Erro ao deletar tarefa:", error);
+    res.status(500).json({ error: "Erro ao deletar tarefa" });
+  }
+});
+
 /* ---------------- AVATAR UPLOAD ---------------- */
 
 const upload = multer({ storage: multer.memoryStorage() });
