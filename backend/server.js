@@ -1,15 +1,29 @@
+/* -------------------------------------------------------
+   SERVER: Backend principal do projeto
+---------------------------------------------------------
+   Serviços implementados:
+   - Express API
+   - Supabase Storage
+   - Redis Cache
+   - Sequelize ORM
+   - Bcrypt (hash de senha)
+   - JWT (autenticação)
+   - Upload de imagens (multer)
+   - Middleware de proteção de rotas
+--------------------------------------------------------- */
 
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import multer from "multer";
 
-import bcrypt from "bcrypt";       // Nova dependência para senhas
-import jwt from "jsonwebtoken";    // Nova dependência para tokens JWT
+import bcrypt from "bcrypt";       // Senhas seguras com hash
+import jwt from "jsonwebtoken";    // Tokens JWT
 
 import bd from "./src/models/index.js";
 import client from "./redis.js";
 import uploadBufferToSupabase from "./src/services/supabaseStorage.js";
+import { auth } from "./src/middleware/auth.js"; // Middleware de proteção
 
 dotenv.config();
 
@@ -39,26 +53,7 @@ function generateToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1d" });
 }
 
-/* Verifica token enviado */
-function verifyTokenInRoute(req, res) {
-  const header = req.headers.authorization;
-
-  if (!header) {
-    res.status(401).json({ error: "Token não enviado" });
-    return null;
-  }
-
-  const token = header.replace("Bearer ", "").trim();
-
-  try {
-    return verifyToken(token);
-  } catch (error) {
-    res.status(401).json({ error: "Token inválido" });
-    return null;
-  }
-}
-
-/* Decodifica token JWT */
+/* Decodifica token JWT diretamente */
 function verifyToken(token) {
   return jwt.verify(token, process.env.JWT_SECRET);
 }
@@ -77,12 +72,12 @@ const HAS_SUPABASE = Boolean(SUPABASE_URL && SUPABASE_KEY);
 
 /* ---------------- HELPERS ---------------- */
 
-/* Garante existência de 1 usuário inicial (útil para testes) */
+/* Garante existência de 1 usuário inicial (apenas para testes) */
 const ensureUserExists = async () => {
   let user = await User.findOne();
 
   if (!user) {
-    const hashed = await hashPassword("123456"); // Senha padrão apenas para DEV
+    const hashed = await hashPassword("123456"); // Senha padrão DEV
 
     user = await User.create({
       name: "Usuário",
@@ -153,23 +148,62 @@ app.post("/auth/login", async (req, res) => {
   }
 });
 
-/* ---------------- ROTAS DE PERFIL ---------------- */
-
-app.get("/profile", async (req, res) => {
+/* -------- SIGNIN (LOGIN) --------
+   Funciona como /auth/login
+------------------------------------------------------- */
+app.post("/signin", async (req, res) => {
   try {
-    const user = await ensureUserExists();
+    const { email, password } = req.body;
+
+    // Verifica se email e senha foram enviados
+    if (!email || !password)
+      return res.status(400).json({ error: "Email e senha são obrigatórios" });
+
+    // Busca o usuário no banco
+    const user = await User.findOne({ where: { email } });
+    if (!user)
+      return res.status(404).json({ error: "Usuário não encontrado" });
+
+    // Compara senha enviada
+    const valid = await comparePassword(password, user.password);
+    if (!valid)
+      return res.status(401).json({ error: "Senha incorreta" });
+
+    // Gera o token JWT
+    const token = generateToken({ id: user.id, email: user.email });
+
+    res.json({ token });
+  } catch (error) {
+    console.error("Erro no signin:", error);
+    res.status(500).json({ error: "Erro ao autenticar usuário" });
+  }
+});
+
+/* ---------------- ROTAS DE PERFIL (PROTEGIDAS) ---------------- */
+
+/* Rota protegida por JWT */
+app.get("/profile", auth, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado" });
+    }
+
     res.json(formatUserResponse(user));
   } catch (error) {
     res.status(500).json({ error: "Erro ao carregar perfil" });
   }
 });
 
-app.put("/profile", async (req, res) => {
+/* Atualização do perfil (sempre protegida) */
+app.put("/profile", auth, async (req, res) => {
   try {
-    const { id, name, email, photo } = req.body;
+    const { name, email } = req.body;
 
-    const user =
-      (id && (await User.findByPk(id))) || (await ensureUserExists());
+    const user = await User.findByPk(req.user.id);
+
+    if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
 
     const updates = {};
 
@@ -223,9 +257,9 @@ app.post("/tasks", async (req, res) => {
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-app.put("/users/:id/avatar", upload.single("avatar"), async (req, res) => {
+app.put("/users/:id/avatar", auth, upload.single("avatar"), async (req, res) => {
   try {
-    const user = await User.findByPk(req.params.id);
+    const user = await User.findByPk(req.user.id);
 
     if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
     if (!req.file) return res.status(400).json({ error: "Imagem obrigatória" });
