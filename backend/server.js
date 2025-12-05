@@ -1,14 +1,3 @@
-/* -------------------------------------------------------
-   SERVER: Backend principal do projeto
----------------------------------------------------------
-   Inclui:
-   - Express API
-   - Supabase Storage
-   - Redis Cache
-   - Sequelize ORM
-   - Bcrypt (hash de senha)
-   - JWT (autenticação)
---------------------------------------------------------- */
 
 import express from "express";
 import cors from "cors";
