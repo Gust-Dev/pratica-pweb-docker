@@ -10,10 +10,7 @@ interface ProtectedRouteProps {
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { isAuthenticated, loading } = useAuth();
 
-  // TEMPORÁRIO: Desabilitar proteção para teste
-  const isTestMode = true;
-
-  if (loading && !isTestMode) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="flex items-center space-x-2">
@@ -24,7 +21,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
 
-  if (!isAuthenticated && !isTestMode) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 

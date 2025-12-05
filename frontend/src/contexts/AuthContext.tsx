@@ -38,18 +38,9 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  // TEMPORÁRIO: Mockar dados para teste
-  const [user, setUser] = useState<User | null>({
-    id: '1',
-    name: 'João Silva',
-    email: 'joao.silva@exemplo.com',
-    photo: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
-  });
-  const [tokens, setTokens] = useState<AuthTokens | null>({
-    accessToken: 'mock-access-token',
-    refreshToken: 'mock-refresh-token'
-  });
-  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [tokens, setTokens] = useState<AuthTokens | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const isAuthenticated = !!user && !!tokens;
 
@@ -89,39 +80,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         body: JSON.stringify({ email, password }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        const { accessToken, refreshToken } = data;
-        
-        setTokens({ accessToken, refreshToken });
-        localStorage.setItem('authTokens', JSON.stringify({ accessToken, refreshToken }));
-        
-        // Buscar dados do usuário
-        const userResponse = await fetch(`${API_BASE_URL}/profile`, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-          },
-        });
-
-        if (userResponse.ok) {
-          const userData = await userResponse.json();
-          setUser(userData);
-          localStorage.setItem('user', JSON.stringify(userData));
-        } else {
-          // Se não conseguir buscar o perfil, criar um usuário básico
-          const basicUser = {
-            id: '1',
-            name: email.split('@')[0],
-            email: email,
-            photo: ''
-          };
-          setUser(basicUser);
-          localStorage.setItem('user', JSON.stringify(basicUser));
-        }
-
-        return true;
+      if (!response.ok) {
+        return false;
       }
-      return false;
+
+      const data = await response.json();
+      const { accessToken, refreshToken, user: userPayload } = data;
+
+      if (!accessToken || !refreshToken || !userPayload) {
+        return false;
+      }
+
+      const authTokens = { accessToken, refreshToken };
+      setTokens(authTokens);
+      localStorage.setItem('authTokens', JSON.stringify(authTokens));
+
+      setUser(userPayload);
+      localStorage.setItem('user', JSON.stringify(userPayload));
+
+      return true;
     } catch (error) {
       console.error('Erro no login:', error);
       return false;

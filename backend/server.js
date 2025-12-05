@@ -22,7 +22,7 @@ import jwt from "jsonwebtoken";    // Tokens JWT
 
 import bd from "./src/models/index.js";
 import client from "./redis.js";
-import uploadBufferToSupabase from "./src/services/supabaseStorage.js";
+import { uploadBufferToSupabase } from "./src/services/supabaseStorage.js";
 import { auth } from "./src/middleware/auth.js"; // Middleware de proteção
 
 dotenv.config();
@@ -141,7 +141,11 @@ app.post("/auth/login", async (req, res) => {
 
     const token = generateToken({ id: user.id, email: user.email });
 
-    res.json({ token });
+    res.json({
+      accessToken: token,
+      refreshToken: token,
+      user: formatUserResponse(user),
+    });
   } catch (error) {
     console.error("Erro no login:", error);
     res.status(500).json({ error: "Erro no login" });
@@ -155,24 +159,34 @@ app.post("/signin", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Verifica se email e senha foram enviados
-    if (!email || !password)
+    if (!email || !password) {
       return res.status(400).json({ error: "Email e senha são obrigatórios" });
+    }
 
-    // Busca o usuário no banco
-    const user = await User.findOne({ where: { email } });
-    if (!user)
-      return res.status(404).json({ error: "Usuário não encontrado" });
+    let user = await User.findOne({ where: { email } });
 
-    // Compara senha enviada
+    if (!user) {
+      const hashedPassword = await hashPassword(password);
+      const derivedName = email.split("@")[0] || "Usuário";
+      user = await User.create({
+        name: derivedName,
+        email,
+        password: hashedPassword,
+      });
+    }
+
     const valid = await comparePassword(password, user.password);
-    if (!valid)
+    if (!valid) {
       return res.status(401).json({ error: "Senha incorreta" });
+    }
 
-    // Gera o token JWT
     const token = generateToken({ id: user.id, email: user.email });
 
-    res.json({ token });
+    res.json({
+      accessToken: token,
+      refreshToken: token,
+      user: formatUserResponse(user),
+    });
   } catch (error) {
     console.error("Erro no signin:", error);
     res.status(500).json({ error: "Erro ao autenticar usuário" });
@@ -225,13 +239,16 @@ app.get("/tasks", async (req, res) => {
   try {
     const cache = await client.get("tasks");
 
-    if (cache) return res.json(JSON.parse(cache));
+    if (cache) {
+      return res.json(JSON.parse(cache));
+    }
 
     const tasks = await Task.findAll();
     await client.setEx("tasks", 30, JSON.stringify(tasks));
 
     res.json(tasks);
   } catch (error) {
+    console.error("Erro ao listar tarefas:", error);
     res.status(500).json({ error: "Erro ao listar tarefas" });
   }
 });
@@ -242,7 +259,6 @@ app.post("/tasks", async (req, res) => {
 
     if (!description)
       return res.status(400).json({ error: "Descrição obrigatória" });
-
     const task = await Task.create({ description, completed: false });
 
     await client.del("tasks");
